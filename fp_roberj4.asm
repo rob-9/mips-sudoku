@@ -523,10 +523,19 @@ rcc_col_loop:
 	# skip the target cell itself
 	beq $t2, $s0, rcc_col_next
 	
+	# save loop counter before function call
+	addi $sp, $sp, -4
+	sw $t2, 0($sp)
+	
 	# get cell at (t2, s1)
 	move $a0, $t2        # row
 	move $a1, $s1        # col
 	jal getCell
+	
+	# restore loop counter
+	lw $t2, 0($sp)
+	addi $sp, $sp, 4
+	
 	bltz $v1, rcc_col_next  # skip if getCell error
 	beqz $v1, rcc_col_next  # skip empty cells (value 0)
 	
@@ -546,10 +555,19 @@ rcc_row_loop:
 	# skip target cell
 	beq $t2, $s1, rcc_row_next
 	
+	# save loop counter before function call
+	addi $sp, $sp, -4
+	sw $t2, 0($sp)
+	
 	# get cell at (s0, t2)
 	move $a0, $s0        # row
 	move $a1, $t2        # col
 	jal getCell
+	
+	# restore loop counter
+	lw $t2, 0($sp)
+	addi $sp, $sp, 4
+	
 	bltz $v1, rcc_row_next  # skip if getCell error
 	beqz $v1, rcc_row_next  # skip empty cells (value 0)
 	
