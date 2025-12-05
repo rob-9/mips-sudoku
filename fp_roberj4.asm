@@ -110,9 +110,46 @@ setCell_error:
 	jr $ra
 
 getCell:
-	# insert code here
-	li $v0, 0x7F # replace this line
-	li $v0, 99 # replace this line
+	# validate bounds
+	bltz $a0, getCell_error
+	li $t0, 8
+	bgt $a0, $t0, getCell_error
+	bltz $a1, getCell_error
+	bgt $a1, $t0, getCell_error
+	
+	# calc memory addr: 0xffff0000 + (row * 9 + col) * 2
+	li $t0, 9
+	mul $t1, $a0, $t0
+	add $t1, $t1, $a1
+	sll $t1, $t1, 1
+	lui $t0, 0xffff
+	add $t1, $t0, $t1
+	
+	# load char and color
+	lbu $t2, 0($t1)
+	lbu $t3, 1($t1)
+	
+	# check valid char
+	beqz $t2, getCell_empty
+	li $t0, 48
+	blt $t2, $t0, getCell_error
+	li $t0, 57
+	bgt $t2, $t0, getCell_error
+	
+	# convert to int
+	addi $t4, $t2, -48
+	move $v0, $t3
+	move $v1, $t4
+	jr $ra
+	
+getCell_empty:
+	move $v0, $t3
+	li $v1, 0
+	jr $ra
+	
+getCell_error:
+	li $v0, 0xFF
+	li $v1, -1
 	jr $ra
 
 reset:
