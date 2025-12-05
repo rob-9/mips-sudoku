@@ -153,8 +153,185 @@ getCell_error:
 	jr $ra
 
 reset:
-	# insert code here
-	li $v0, 45 # replace this line
+	# int reset(CColor curColor, byte err_bg, int numConflicts)
+	# a0: curColor (CColor data structure)
+	# a1: err_bg  
+	# a2: numConflicts
+	
+	# save regs
+	addi $sp, $sp, -24
+	sw $ra, 20($sp)
+	sw $s0, 16($sp)
+	sw $s1, 12($sp)
+	sw $s2, 8($sp)
+	sw $s3, 4($sp)
+	sw $s4, 0($sp)
+	
+	move $s0, $a0    # curColor
+	move $s1, $a1    # err_bg
+	move $s2, $a2    # numConflicts
+	
+	# validate err_bg
+	li $t0, 0xF
+	bgt $s1, $t0, reset_error
+	
+	# check numConflicts cases
+	bltz $s2, reset_clear_all
+	beqz $s2, reset_preset_only
+	j reset_conflicts
+	
+reset_clear_all:
+	# clear entire board
+	li $s3, 0        # row
+reset_clear_all_row:
+	li $s4, 0        # col
+reset_clear_all_col:
+	move $a0, $s3
+	move $a1, $s4
+	li $a2, 0        # clear cell
+	li $a3, 0xF0     # white bg, black fg
+	jal setCell
+	bltz $v0, reset_error
+	
+	addi $s4, $s4, 1
+	li $t0, 9
+	blt $s4, $t0, reset_clear_all_col
+	
+	addi $s3, $s3, 1
+	li $t0, 9
+	blt $s3, $t0, reset_clear_all_row
+	j reset_success
+	
+reset_preset_only:
+	# extract colors from curColor
+	andi $t0, $s0, 0xF    # gc_fg
+	srl $t1, $s0, 4
+	andi $t1, $t1, 0xF    # gc_bg
+	sll $t2, $t1, 4
+	or $t2, $t2, $t0      # gc color byte
+	
+	li $s3, 0        # row
+reset_preset_row:
+	li $s4, 0        # col
+reset_preset_col:
+	# get current cell
+	move $a0, $s3
+	move $a1, $s4
+	jal getCell
+	bltz $v1, reset_error
+	
+	# check if game cell (fg matches gc_fg)
+	andi $t3, $v0, 0xF    # current fg
+	beq $t3, $t0, reset_clear_game_cell
+	j reset_preset_next
+	
+reset_clear_game_cell:
+	move $a0, $s3
+	move $a1, $s4
+	li $a2, 0        # clear
+	move $a3, $t2    # gc color
+	jal setCell
+	bltz $v0, reset_error
+	
+reset_preset_next:
+	addi $s4, $s4, 1
+	li $t1, 9
+	blt $s4, $t1, reset_preset_col
+	
+	addi $s3, $s3, 1
+	li $t1, 9
+	blt $s3, $t1, reset_preset_row
+	j reset_success
+	
+reset_conflicts:
+	# search column-major for err_bg cells
+	li $s3, 0        # col
+	li $t0, 0        # conflicts found
+reset_conf_col:
+	li $s4, 0        # row
+reset_conf_row:
+	# get cell
+	move $a0, $s4
+	move $a1, $s3
+	jal getCell
+	bltz $v1, reset_error
+	
+	# check if bg matches err_bg
+	srl $t1, $v0, 4
+	andi $t1, $t1, 0xF
+	bne $t1, $s1, reset_conf_next
+	
+	# found conflict cell - determine type & reset
+	andi $t2, $v0, 0xF    # current fg
+	
+	# extract gc_fg and pc_fg from curColor
+	andi $t3, $s0, 0xF    # gc_fg
+	srl $t4, $s0, 8
+	andi $t4, $t4, 0xF    # pc_fg
+	
+	beq $t2, $t3, reset_conf_game
+	beq $t2, $t4, reset_conf_preset
+	j reset_error
+	
+reset_conf_game:
+	# reset game cell
+	srl $t5, $s0, 4
+	andi $t5, $t5, 0xF    # gc_bg
+	sll $t6, $t5, 4
+	or $t6, $t6, $t3      # gc color
+	move $a0, $s4
+	move $a1, $s3
+	li $a2, 0
+	move $a3, $t6
+	jal setCell
+	bltz $v0, reset_error
+	j reset_conf_found
+	
+reset_conf_preset:
+	# reset preset cell
+	srl $t5, $s0, 12
+	andi $t5, $t5, 0xF    # pc_bg
+	sll $t6, $t5, 4
+	or $t6, $t6, $t4      # pc color
+	move $a0, $s4
+	move $a1, $s3
+	li $a2, -1
+	move $a3, $t6
+	jal setCell
+	bltz $v0, reset_error
+	
+reset_conf_found:
+	addi $t0, $t0, 1
+	beq $t0, $s2, reset_success
+	
+reset_conf_next:
+	addi $s4, $s4, 1
+	li $t1, 9
+	blt $s4, $t1, reset_conf_row
+	
+	addi $s3, $s3, 1
+	li $t1, 9
+	blt $s3, $t1, reset_conf_col
+	
+	# not enough conflicts found
+	j reset_error
+	
+reset_success:
+	li $v0, 0
+	j reset_done
+	
+reset_error:
+	li $v0, -1
+	
+reset_done:
+	# restore regs
+	lw $s4, 0($sp)
+	lw $s3, 4($sp)
+	lw $s2, 8($sp)
+	lw $s1, 12($sp)
+	lw $s0, 16($sp)
+	lw $ra, 20($sp)
+	addi $sp, $sp, 24
 	jr $ra
 
 ##########################################
