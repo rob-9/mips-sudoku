@@ -971,5 +971,158 @@ check_done:
 	jr $ra
 
 makeMove:
-	li $v0, 0XDEAD  # replace this line
+	# (int, int) makeMove(char[] move, CColor playerColors, byte err_color)
+	# a0: move string address
+	# a1: playerColors (CColor structure)
+	# a2: err_color
+	
+	# save regs
+	addi $sp, $sp, -32
+	sw $ra, 28($sp)
+	sw $s0, 24($sp)
+	sw $s1, 20($sp)
+	sw $s2, 16($sp)
+	sw $s3, 12($sp)
+	sw $s4, 8($sp)
+	sw $s5, 4($sp)
+	sw $s6, 0($sp)
+	
+	# save paramns
+	move $s0, $a0    # move str
+	move $s1, $a1    # playerColors
+	move $s2, $a2    # err_color
+	
+	# parse move str to get row,col
+	move $a0, $s0
+	li $a1, 0 # flag = 0
+	jal getBoardInfo
+	li $t0, -1
+	beq $v0, $t0, mm_error # invalid loc
+	move $s3, $v0    # row
+	move $s4, $v1    # col
+	
+	# parse move str to get val,type
+	move $a0, $s0
+	li $a1, 1 # flag = 1
+	jal getBoardInfo
+	li $t0, -1
+	beq $v0, $t0, mm_error  # invalid val
+	move $s5, $v0
+	
+	# get current cell state
+	move $a0, $s3
+	move $a1, $s4
+	jal getCell
+	bltz $v1, mm_error
+	move $s6, $v0
+	move $t7, $v1
+	
+	# check if current value == moveValue && (curValue == '\0' && moveValue == 0)
+	# this means no action needed
+	beq $t7, $s5, mm_check_same_value
+	j mm_validate_preset
+	
+mm_check_same_value:
+	bnez $t7, mm_no_change  # same non-zero values
+	beqz $s5, mm_no_change  # both zero
+	j mm_validate_preset
+	
+mm_no_change:
+	li $v0, 0
+	li $v1, 0
+	j mm_done
+	
+mm_validate_preset:
+	# check if trying to modify preset cell
+	# extract preset cell fg from playerColors
+	srl $t0, $s1, 8
+	andi $t0, $t0, 0xF       # pc_fg
+	andi $t1, $s6, 0xF       # curr cell fg
+	beq $t1, $t0, mm_preset_error
+	
+	# check if move is to clear the cell
+	beqz $s5, mm_clear_cell
+	
+	# check for conflicts
+	addi $sp, $sp, -4
+	li $t0, 1  # flag = 1
+	sw $t0, 0($sp)
+	
+	move $a0, $s3    # row
+	move $a1, $s4    # col
+	move $a2, $s5    # value
+	move $a3, $s2    # err_color
+	jal check
+	
+	addi $sp, $sp, 4
+	
+	# conflicts found
+	bnez $v0, mm_conflict_error
+	
+	# no conflicts, place val
+	# extract gc color from playerColors
+	andi $t0, $s1, 0xF
+	srl $t1, $s1, 4
+	andi $t1, $t1, 0xF
+	sll $t2, $t1, 4
+	or $t3, $t2, $t0
+	
+	move $a0, $s3
+	move $a1, $s4
+	move $a2, $s5
+	move $a3, $t3
+	jal setCell
+	bltz $v0, mm_error
+	
+	li $v0, 0
+	li $v1, -1
+	j mm_done
+	
+mm_clear_cell:
+	# clear the cell
+	# extract gc color from playerColors
+	andi $t0, $s1, 0xF       # gc_fg
+	srl $t1, $s1, 4
+	andi $t1, $t1, 0xF       # gc_bg
+	sll $t2, $t1, 4
+	or $t3, $t2, $t0         # gc color byte
+	
+	move $a0, $s3
+	move $a1, $s4
+	li $a2, 0        # clear cell
+	move $a3, $t3    # gc color
+	jal setCell
+	bltz $v0, mm_error
+	
+	li $v0, 0
+	li $v1, 1
+	j mm_done
+	
+mm_preset_error:
+	li $v0, -1 
+	li $v1, 0 
+	j mm_done
+	
+mm_conflict_error:
+	# conflicts found, return error w cnt
+	move $t0, $v0  # num of conflicts
+	li $v0, -1     # flag = error
+	move $v1, $t0  # cellChange = number of conflicts
+	j mm_done
+	
+mm_error:
+	li $v0, -1
+	li $v1, 0        # cellChange = no change (not -1 for error)
+	
+mm_done:
+	# restore regs
+	lw $s6, 0($sp)
+	lw $s5, 4($sp)
+	lw $s4, 8($sp)
+	lw $s3, 12($sp)
+	lw $s2, 16($sp)
+	lw $s1, 20($sp)
+	lw $s0, 24($sp)
+	lw $ra, 28($sp)
+	addi $sp, $sp, 32
 	jr $ra
