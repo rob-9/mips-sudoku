@@ -173,26 +173,6 @@ reset:
 	li $t0, 0xF
 	bgt $s1, $t0, reset_error
 
-	# validate curColor combination
-	andi $t0, $s0, 0xF       # gc_fg
-	srl $t1, $s0, 4
-	andi $t1, $t1, 0xF       # gc_bg
-	srl $t2, $s0, 8
-	andi $t2, $t2, 0xF       # pc_fg
-	srl $t3, $s0, 12
-	andi $t3, $t3, 0xF       # pc_bg
-
-	# err_bg != any color
-	beq $s1, $t0, reset_error
-	beq $s1, $t1, reset_error
-	beq $s1, $t2, reset_error
-	beq $s1, $t3, reset_error
-
-	# pc_fg != gc_fg, pc_fg != pc_bg, gc_bg != gc_fg
-	beq $t2, $t0, reset_error
-	beq $t2, $t3, reset_error
-	beq $t1, $t0, reset_error
-
 	# check numConflicts cases
 	bltz $s2, reset_clear_all
 	beqz $s2, reset_preset_only
