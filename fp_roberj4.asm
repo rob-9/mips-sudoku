@@ -129,14 +129,12 @@ getCell:
 	lbu $t2, 0($t1)
 	lbu $t3, 1($t1)
 	
-	# check valid char
 	beqz $t2, getCell_empty
-	li $t0, 48
+	li $t0, 49
 	blt $t2, $t0, getCell_error
 	li $t0, 57
 	bgt $t2, $t0, getCell_error
-	
-	# convert to int
+
 	addi $t4, $t2, -48
 	move $v0, $t3
 	move $v1, $t4
@@ -209,9 +207,18 @@ reset_preset_only:
 	sll $t2, $t1, 4
 	or $t2, $t2, $t0
 
-	addi $sp, $sp, -8
-	sw $t0, 4($sp)
-	sw $t2, 0($sp)
+	srl $t3, $s0, 8
+	andi $t3, $t3, 0xF
+	srl $t4, $s0, 12
+	andi $t4, $t4, 0xF
+	sll $t5, $t4, 4
+	or $t5, $t5, $t3
+
+	addi $sp, $sp, -16
+	sw $t0, 12($sp)
+	sw $t2, 8($sp)
+	sw $t3, 4($sp)
+	sw $t5, 0($sp)
 
 	li $s3, 0
 reset_preset_row:
@@ -223,19 +230,31 @@ reset_preset_col:
 
 	bltz $v1, reset_preset_error_cleanup
 
-	lw $t0, 4($sp)
+	lw $t0, 12($sp)
+	lw $t3, 4($sp)
 
-	andi $t3, $v0, 0xF
-	bne $t3, $t0, reset_preset_next
+	andi $t6, $v0, 0xF
+	beq $t6, $t0, reset_clear_game_cell
+	beq $t6, $t3, reset_color_preset_cell
+	j reset_preset_error_cleanup
 
-	lw $t2, 0($sp)
-
+reset_clear_game_cell:
+	lw $t2, 8($sp)
 	move $a0, $s3
 	move $a1, $s4
 	li $a2, 0
 	move $a3, $t2
 	jal setCell
+	bltz $v0, reset_preset_error_cleanup
+	j reset_preset_next
 
+reset_color_preset_cell:
+	lw $t5, 0($sp)
+	move $a0, $s3
+	move $a1, $s4
+	li $a2, -1
+	move $a3, $t5
+	jal setCell
 	bltz $v0, reset_preset_error_cleanup
 
 reset_preset_next:
@@ -247,11 +266,11 @@ reset_preset_next:
 	li $t1, 9
 	blt $s3, $t1, reset_preset_row
 
-	addi $sp, $sp, 8
+	addi $sp, $sp, 16
 	j reset_success
 
 reset_preset_error_cleanup:
-	addi $sp, $sp, 8
+	addi $sp, $sp, 16
 	j reset_error
 	
 reset_conflicts:
